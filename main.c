@@ -1,3 +1,12 @@
+/*
+Bruno Alteração:
+Mudei a hitbox do pato em gMouse() para 25.
+Aumentei a velocidade dos patos em ResetaPato()
+Spawn do pato nas laterais e quicando fora da tela
+Alterei tirando toda partr 3D pra puramente 2D, eliminando necessidade dimensão Z
+Otimização: Implementado Delta Time e V-Sync via Idle Loop para eliminar travamentos e engasgos visuais. Porém n sei se é meu note ou jogo msm.
+Adicionado: Cronômetro de 60 segundos com reset automático de jogo ao zerar.
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,42 +20,65 @@
 
 #define TAM_JANELA 100.00
 
+// Definição do protótipo para o V-Sync do Windows
+typedef BOOL (WINAPI *PFNWGLSWAPINTERVALEXTPROC) (int interval);
+
 // Variáveis de controle de Janela (Estrutura do Modelo)
 int g_posicao_x = 50;
 int g_posicao_y = 50;
 int g_largura = 800;
 int g_altura = 600;
-char g_titulo[] = "Duck Hunt";
-int g_idle = 0;
-int g_timer = 1;           // Ativado para animação
-int g_timer_value = 25;    // Taxa de atualização (25ms)
+char g_titulo[] = "Duck Hunt 2D";
 
-// Variáveis de Projeção e Jogo
-float g_angulo_visao = 60.0f; 
-float g_z_proximo = 1.0f;
-float g_z_distante = 100.0f;
+int g_idle = 1;
+int g_timer = 0;           
+int g_timer_value = 16;    
 
+// Variáveis de Projeção e Jogo (Adaptadas para 2D)
 float g_pato_x = 0;
 float g_pato_y = 0;
-float g_pato_z = -10.0f;
-float g_pato_vel_x = 0.12f;
-float g_pato_vel_y = 0.08f;
+float g_pato_vel_x = 8.0f;  
+float g_pato_vel_y = 3.0f;
 int g_pato_vivo = 1;
 int g_score = 0;
 int g_foi_baleado = 0;
 int g_botao_pressionado = 0;
 
+// Variáveis de Controle do Cronômetro e Estado de Fim de Jogo
+float g_cronometro = 60.0f;       // Tempo inicial (1 minuto)
+int g_jogo_finalizado = 0;       // Trava o jogo quando o tempo zera
+float g_tempo_tela_final = 0.0f;  // Acumulador para segurar a tela de "Fim" por 2 segundos
+
+// Controle de Tempo Real (Delta Time)
+int g_tempo_anterior = 0;
+
 // Funções Lógicas do Jogo
 void ResetaPato() {
     g_pato_vivo = 1;
     g_foi_baleado = 0;
-    g_pato_x = -7.0f + (rand() % 15);
-    g_pato_y = rand() % 6;
-    g_pato_z = -10.0f;
-    g_pato_vel_x = 0.08f + (rand() % 8) / 100.0f;
-    g_pato_vel_y = 0.05f + (rand() % 6) / 100.0f;
-    if (rand() % 2 == 0) g_pato_vel_x = -g_pato_vel_x;
+    
+    g_pato_y = rand() % 5;
+    
+    g_pato_vel_x = 8.0f + (rand() % 200) / 20.0f;
+    g_pato_vel_y = 3.0f + (rand() % 60) / 20.0f;
+    
     if (rand() % 2 == 0) g_pato_vel_y = -g_pato_vel_y;
+
+    if (rand() % 2 == 0) {
+        g_pato_x = -13.5f; 
+        if (g_pato_vel_x < 0) g_pato_vel_x = -g_pato_vel_x;
+    } else {
+        g_pato_x = 13.5f;  
+        if (g_pato_vel_x > 0) g_pato_vel_x = -g_pato_vel_x;
+    }
+}
+
+void ResetaJogoCompleto() {
+    g_score = 0;
+    g_cronometro = 60.0f;
+    g_jogo_finalizado = 0;
+    g_tempo_tela_final = 0.0f;
+    ResetaPato();
 }
 
 void DesenhaPato() {
@@ -58,10 +90,7 @@ void DesenhaPato() {
     }
     
     if (g_foi_baleado) {
-        g_pato_y -= 0.3f;
-        if (g_pato_y < -2.0f) g_pato_y = -2.0f;
-        
-        glTranslatef(g_pato_x, g_pato_y, g_pato_z);
+        glTranslatef(g_pato_x, g_pato_y, 0.0f);
         glScalef(escala_x, 0.006f, 1.0f);
         
         glLineWidth(1.5f);
@@ -149,7 +178,7 @@ void DesenhaPato() {
         glEnd();
         
     } else {
-        glTranslatef(g_pato_x, g_pato_y, g_pato_z);
+        glTranslatef(g_pato_x, g_pato_y, 0.0f);
         glScalef(escala_x, 0.006f, 1.0f);
         
         glColor3f(0.1f, 0.1f, 0.1f); 
@@ -257,44 +286,34 @@ void DesenhaPato() {
 }
 
 void DesenhaCenario() {
-    glColor3f(0.0f, 0.6f, 0.0f);
+    glColor3f(0.2f, 0.7f, 0.2f);
     glBegin(GL_QUADS);
-        glVertex3f(-20.0f, -2.0f, -20.0f);
-        glVertex3f(-20.0f, -2.0f, 10.0f);
-        glVertex3f(20.0f, -2.0f, 10.0f);
-        glVertex3f(20.0f, -2.0f, -20.0f);
+        glVertex2f(-12.0f, -2.0f);  
+        glVertex2f(-12.0f, -2.3f);  
+        glVertex2f( 12.0f, -2.3f);  
+        glVertex2f( 12.0f, -2.0f);  
     glEnd();
-    
-    glPushMatrix();
-        glTranslatef(-8.0f, -2.0f, -15.0f);
-        glColor3f(0.5f, 0.3f, 0.1f);
-        glRectf(-0.3f, 0.0f, 0.3f, 3.0f);
-        glColor3f(0.0f, 0.5f, 0.0f);
-        glTranslatef(0.0f, 3.0f, 0.0f);
-        glutSolidSphere(1.2, 10, 10);
-    glPopMatrix();
-    
-    glPushMatrix();
-        glTranslatef(7.0f, -2.0f, -12.0f);
-        glColor3f(0.5f, 0.3f, 0.1f);
-        glRectf(-0.25f, 0.0f, 0.25f, 2.5f);
-        glColor3f(0.0f, 0.5f, 0.0f);
-        glTranslatef(0.0f, 2.5f, 0.0f);
-        glutSolidSphere(1.0, 10, 10);
-    glPopMatrix();
-    
-    glPushMatrix();
-        glColor3f(1.0f, 1.0f, 1.0f);
-        glTranslatef(-5.0f, 7.0f, -18.0f);
-        glutSolidSphere(1.2, 8, 8);
-        glTranslatef(1.0f, 0.3f, 0.0f);
-        glutSolidSphere(1.0, 8, 8);
-    glPopMatrix();
+
+    glColor3f(0.25f, 0.12f, 0.0f);
+    glBegin(GL_QUADS);
+        glVertex2f(-12.0f, -2.2f);  
+        glVertex2f(-12.0f, -2.3f);  
+        glVertex2f( 12.0f, -2.3f);  
+        glVertex2f( 12.0f, -2.2f);  
+    glEnd();
+
+    glColor3f(0.5f, 0.25f, 0.05f);
+    glBegin(GL_QUADS);
+        glVertex2f(-12.0f, -2.3f);  
+        glVertex2f(-12.0f, -5.0f);  
+        glVertex2f( 12.0f, -5.0f);  
+        glVertex2f( 12.0f, -2.3f);  
+    glEnd();
 }
 
 void DesenhaUI() {
     int i;
-    glDisable(GL_DEPTH_TEST);
+    char buffer[50];
     
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
@@ -303,9 +322,9 @@ void DesenhaUI() {
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
+    // Placar (Esquerda)
     glColor3f(1.0f, 1.0f, 1.0f);
     glRasterPos2i(15, g_altura - 30);
-    char buffer[50];
     sprintf(buffer, "SCORE: %d", g_score);
     i = 0;
     while (buffer[i]) {
@@ -313,7 +332,42 @@ void DesenhaUI() {
         i++;
     }
 
-    if (g_foi_baleado) {
+    // Cronômetro (Direita superior)
+    if (g_cronometro < 10.0f) {
+        glColor3f(1.0f, 0.2f, 0.2f); 
+    } else {
+        glColor3f(1.0f, 1.0f, 0.0f); 
+    }
+    glRasterPos2i(g_largura - 150, g_altura - 30);
+    sprintf(buffer, "TEMPO: %.1fs", g_cronometro);
+    i = 0;
+    while (buffer[i]) {
+        glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, buffer[i]);
+        i++;
+    }
+
+    // Tela de Fim de Jogo
+    if (g_jogo_finalizado) {
+        glColor3f(1.0f, 0.0f, 0.0f);
+        glRasterPos2i(g_largura / 2 - 100, g_altura / 2 + 20);
+        char fim_msg[] = "TEMPO ESGOTADO!";
+        i = 0;
+        while (fim_msg[i]) {
+            glutBitmapCharacter(GLUT_BITMAP_TIMES_ROMAN_24, fim_msg[i]);
+            i++;
+        }
+        
+        glColor3f(1.0f, 1.0f, 1.0f);
+        glRasterPos2i(g_largura / 2 - 70, g_altura / 2 - 15);
+        char reset_msg[] = "Reiniciando...";
+        i = 0;
+        while (reset_msg[i]) {
+            glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, reset_msg[i]);
+            i++;
+        }
+    }
+
+    if (g_foi_baleado && !g_jogo_finalizado) {
         glColor3f(1.0f, 0.0f, 0.0f);
         glRasterPos2i(g_largura/2 - 60, g_altura/2 + 20);
         char msg[] = "ACERTOU! +100";
@@ -333,25 +387,68 @@ void DesenhaUI() {
         i++;
     }
 
-    glEnable(GL_DEPTH_TEST);
     glPopMatrix();
     glMatrixMode(GL_PROJECTION);
 }
 
-// Implementações das Callbacks do Modelo Base
+void DesenhaEixosComNumeracao() {
+    glColor3f(0.65f, 0.65f, 0.65f);
+    glLineWidth(1.0f);
+    glBegin(GL_LINES);
+        for (int x = -12; x <= 12; x++) {
+            glVertex2f((float)x, -5.0f);
+            glVertex2f((float)x, 10.0f);
+        }
+        for (int y = -5; y <= 10; y++) {
+            glVertex2f(-12.0f, (float)y);
+            glVertex2f(12.0f, (float)y);
+        }
+    glEnd();
+
+    glLineWidth(2.5f);
+    glBegin(GL_LINES);
+        glColor3f(0.0f, 0.5f, 0.0f);
+        glVertex2f(-12.0f, 0.0f);
+        glVertex2f(12.0f, 0.0f);
+
+        glColor3f(0.8f, 0.0f, 0.0f);
+        glVertex2f(0.0f, -5.0f);
+        glVertex2f(0.0f, 10.0f);
+    glEnd();
+
+    glColor3f(0.0f, 0.0f, 0.0f);
+    for (int x = -10; x <= 10; x += 2) {
+        glRasterPos2f((float)x, -0.5f); 
+        char label[8];
+        sprintf(label, "%d", x);
+        for (int i = 0; label[i] != '\0'; i++) {
+            glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, label[i]);
+        }
+    }
+
+    for (int y = -4; y <= 8; y += 2) {
+        if (y == 0) continue; 
+        glRasterPos2f(0.2f, (float)y); 
+        char label[8];
+        sprintf(label, "%d", y);
+        for (int i = 0; label[i] != '\0'; i++) {
+            glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, label[i]);
+        }
+    }
+}
+
 void gMeusDesenhos() {
-    // Configuração de perspectiva 3D necessária para o jogo funcionar
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    gluPerspective(g_angulo_visao, (float)g_largura/g_altura, g_z_proximo, g_z_distante);
+    glOrtho(-12.0, 12.0, -5.0, 10.0, -1.0, 1.0);
     
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    gluLookAt(0, 2, 0,  0, 2, -10,  0, 1, 0);
     
-    DesenhaCenario();
-    DesenhaPato();
-    DesenhaUI();
+    DesenhaCenario();            
+    DesenhaEixosComNumeracao();  
+    DesenhaPato();               
+    DesenhaUI();                 
 }
 
 void gDesenha (void) {
@@ -363,21 +460,11 @@ void gDesenha (void) {
 }
 
 void gRedimensiona (GLsizei largura, GLsizei altura) {
-    GLsizei a_l, l_a;
-   
     if (altura == 0) altura = 1; 
-    g_largura = largura; // Atualiza dimensões internas para cálculo do clique do mouse
+    g_largura = largura; 
     g_altura = altura;
-    
-    a_l = altura / largura;
-    l_a = largura / altura;
    
     glViewport (0, 0, largura, altura); 
-    glMatrixMode (GL_PROJECTION); 
-    glLoadIdentity(); 
-   
-    if (largura <= altura) gluOrtho2D (-TAM_JANELA, TAM_JANELA, (-TAM_JANELA * a_l), (TAM_JANELA * a_l));
-    else gluOrtho2D ((-TAM_JANELA * l_a), (TAM_JANELA * l_a), -TAM_JANELA, TAM_JANELA);
 }
 
 void gTeclado (unsigned char tecla, int x, int y) {
@@ -389,20 +476,21 @@ void gEspeciais (int tecla, int x, int y) {
 }
 
 void gMouse (int botao, int estado, int x, int y) {
-    char msg[200];
+    if (g_jogo_finalizado) return;
+
     if (botao == GLUT_LEFT_BUTTON) {
         if (estado == GLUT_DOWN) {
             g_botao_pressionado = 1;
             
             if (g_pato_vivo && !g_foi_baleado) {
-                int patoTelaX = (int)((g_pato_x + 9.0f) * (g_largura / 18.0f));
-                int patoTelaY = (int)((g_pato_y + 1.0f) * (g_altura / 8.0f));
+                int patoTelaX = (int)((g_pato_x + 12.0f) * (g_largura / 24.0f));
+                int patoTelaY = (int)((g_pato_y + 5.0f) * (g_altura / 15.0f));
                 
                 float dx = (float)x - patoTelaX;
                 float dy = (float)(g_altura - y) - patoTelaY;
                 float dist = sqrt(dx*dx + dy*dy);
                 
-                if (dist < 80.0f) {
+                if (dist < 25.0f) {  
                     g_foi_baleado = 1;
                     g_pato_vivo = 0;
                     g_score += 100;
@@ -417,47 +505,82 @@ void gMouse (int botao, int estado, int x, int y) {
 }
 
 void gTempoExecucao (int valor) {
-    if (!g_foi_baleado) {
-        g_pato_x += g_pato_vel_x;
-        g_pato_y += g_pato_vel_y;
+    int tempo_atual = glutGet(GLUT_ELAPSED_TIME);
+    float dt = (tempo_atual - g_tempo_anterior) / 1000.0f;
+    g_tempo_anterior = tempo_atual;
+
+    if (dt > 0.1f) dt = 0.1f;
+
+    if (!g_jogo_finalizado) {
+        g_cronometro -= dt; 
         
-        if (g_pato_x > 9 || g_pato_x < -9) g_pato_vel_x = -g_pato_vel_x;
-        if (g_pato_y > 7 || g_pato_y < -1) g_pato_vel_y = -g_pato_vel_y;
+        if (g_cronometro <= 0.0f) {
+            g_cronometro = 0.0f;
+            g_jogo_finalizado = 1; 
+        }
+
+        if (!g_foi_baleado) {
+            g_pato_x += g_pato_vel_x * dt;
+            g_pato_y += g_pato_vel_y * dt;
+            
+            if (g_pato_x > 13.5f) { g_pato_x = 13.5f; g_pato_vel_x = -g_pato_vel_x; }
+            if (g_pato_x < -13.5f) { g_pato_x = -13.5f; g_pato_vel_x = -g_pato_vel_x; }
+            
+            if (g_pato_y > 9.0f) { g_pato_y = 9.0f; g_pato_vel_y = -g_pato_vel_y; }
+            if (g_pato_y < -1.5f) { g_pato_y = -1.5f; g_pato_vel_y = -g_pato_vel_y; }
+        } else {
+            g_pato_y -= 12.0f * dt;
+            if (g_pato_y < -2.0f) g_pato_y = -2.0f;
+
+            static float acumulador_morte = 0;
+            acumulador_morte += dt;
+            if (acumulador_morte > 0.75f) { 
+                ResetaPato();
+                acumulador_morte = 0;
+            }
+        }
     } else {
-        static int tempo_morte = 0;
-        tempo_morte++;
-        if (tempo_morte > 30) {
-            ResetaPato();
-            tempo_morte = 0;
+        // CORREÇÃO: Linha duplicada errada removida daqui. Apenas incrementa a tela final.
+        g_tempo_tela_final += dt;
+        if (g_tempo_tela_final >= 2.0f) {
+            ResetaJogoCompleto();
         }
     }
     
     glutPostRedisplay();
-    glutTimerFunc(g_timer_value, gTempoExecucao, 1);
 }
 
-// Preservadas do Modelo
+void gSistemaOcioso (void) {
+    gTempoExecucao(0);
+}
+
 void gMousePressionado (int x, int y) {;}
 void gMouseLiberado (int x, int y) {;}
 void gMouseScroll (int botao, int direcao, int x, int y) {;}
-void gSistemaOcioso (void) {;}
 void gMenuTeclado (void) {;}
 void gMenuJanela (void) {;}
 
 void gInicializa (void) {
-    glEnable(GL_DEPTH_TEST);
-    glClearColor (0.53f, 0.81f, 0.92f, 1.0f); // Cor do céu adaptada
+    glDisable(GL_DEPTH_TEST); 
+    glClearColor (0.53f, 0.81f, 0.92f, 1.0f); 
     srand((unsigned int)time(NULL));
-    ResetaPato();
     
-    glMatrixMode (GL_PROJECTION);
-    gluOrtho2D (-TAM_JANELA, TAM_JANELA, -TAM_JANELA, TAM_JANELA); 
+    PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = 
+        (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
+    if (wglSwapIntervalEXT) {
+        wglSwapIntervalEXT(1); 
+        printf("V-Sync ativated com sucesso!\n");
+    } else {
+        printf("Aviso: V-Sync nao suportado pelo driver.\n");
+    }
+
+    g_tempo_anterior = glutGet(GLUT_ELAPSED_TIME); 
+    ResetaJogoCompleto(); 
 }
 
 int main (int argc, char *argv[]) {
-    
     glutInit (&argc, argv); 
-    glutInitDisplayMode (GLUT_DOUBLE | GLUT_DEPTH | GLUT_RGB);
+    glutInitDisplayMode (GLUT_DOUBLE | GLUT_RGB); 
     glutInitWindowPosition (g_posicao_x, g_posicao_y);
     glutInitWindowSize (g_largura, g_altura);
     glutCreateWindow (g_titulo);
@@ -480,7 +603,5 @@ int main (int argc, char *argv[]) {
     
     glutMainLoop ();
     
-    system ("pause");
     return 0;
 }
-

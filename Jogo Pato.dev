@@ -1,6 +1,6 @@
 [Project]
-FileName=Projeto1.dev
-Name=Projeto1
+FileName=Jogo Pato.dev
+Name=Jogo Pato
 Type=0
 Ver=2
 ObjFiles=
@@ -19,7 +19,7 @@ ObjectOutput=
 LogOutput=
 LogOutputEnabled=0
 OverrideOutput=0
-OverrideOutputName=Projeto1.exe
+OverrideOutputName=Jogo Pato.exe
 HostApplication=
 UseCustomMakefile=0
 CustomMakefile=
@@ -28,8 +28,8 @@ Folders=
 IncludeVersionInfo=0
 SupportXPThemes=0
 CompilerSet=0
-CompilerSettings=0000000000000000000000000
-UnitCount=1
+CompilerSettings=00000000e0000000000000000
+UnitCount=2
 
 [VersionInfo]
 Major=1
@@ -56,6 +56,15 @@ CompileCpp=0
 Folder=
 Compile=1
 Link=1
+Priority=1000
+OverrideBuildCmd=0
+BuildCmd=
+
+[Unit2]
+FileName=..\Pato\duck.dev
+Folder=
+Compile=0
+Link=0
 Priority=1000
 OverrideBuildCmd=0
 BuildCmd=
