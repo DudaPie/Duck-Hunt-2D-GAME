@@ -34,6 +34,8 @@ int g_idle = 1;
 int g_timer = 0;           
 int g_timer_value = 16;    
 
+
+
 // Variáveis de Projeção e Jogo (Adaptadas para 2D)
 float g_pato_x = 0;
 float g_pato_y = 0;
@@ -79,6 +81,33 @@ void ResetaJogoCompleto() {
     g_jogo_finalizado = 0;
     g_tempo_tela_final = 0.0f;
     ResetaPato();
+}
+
+// Função auxiliar para desenhar as formas circulares da copa
+void DesenhaCirculoSolido(float cx, float cy, float r, float red, float green, float blue) {
+    int seg = 24;
+    glColor3f(red, green, blue);
+    glBegin(GL_TRIANGLE_FAN);
+        glVertex2f(cx, cy);
+        for (int i = 0; i <= seg; i++) {
+            float ang = i * 2.0f * 3.14159265f / seg;
+            glVertex2f(cx + cos(ang) * r, cy + sin(ang) * r);
+        }
+    glEnd();
+    // Aqui não pode ter nenhuma chamada de glBegin(GL_LINE_LOOP) ou glColor3f com valores mais escuros!
+}
+
+void DesenhaNonagonoSolido(float cx, float cy, float r, float red, float green, float blue) {
+    int lados = 9;
+    glColor3f(red, green, blue);
+    glBegin(GL_TRIANGLE_FAN);
+        glVertex2f(cx, cy); // Centro do polígono
+        for (int i = 0; i <= lados; i++) {
+            // Divide os 360 graus (2 * PI) por 9 lados
+            float ang = i * 2.0f * 3.14159265f / lados;
+            glVertex2f(cx + cos(ang) * r, cy + sin(ang) * r);
+        }
+    glEnd();
 }
 
 void DesenhaPato() {
@@ -286,12 +315,13 @@ void DesenhaPato() {
 }
 
 void DesenhaCenario() {
-    glColor3f(0.2f, 0.7f, 0.2f);
+	
+	glColor3f(0.2f, 0.7f, 0.2f);
     glBegin(GL_QUADS);
-        glVertex2f(-12.0f, -2.0f);  
+        glVertex2f(-12.0f, 1.3f);  
         glVertex2f(-12.0f, -2.3f);  
         glVertex2f( 12.0f, -2.3f);  
-        glVertex2f( 12.0f, -2.0f);  
+        glVertex2f( 12.0f, 1.3f);  
     glEnd();
 
     glColor3f(0.25f, 0.12f, 0.0f);
@@ -309,6 +339,220 @@ void DesenhaCenario() {
         glVertex2f( 12.0f, -5.0f);  
         glVertex2f( 12.0f, -2.3f);  
     glEnd();
+	
+	glPushMatrix(); //curculo lago
+    // 1. Cor do lago (azul)
+    glColor3f(0.2f, 0.5f, 0.8f); 
+
+    // Novos parâmetros: X de -8 a 8 | Y de -2 a 1
+    float centro_x = 0.0f;     // Mudou para 0.0f (centralizado)
+    float centro_y = -0.5f;
+    float raio_x = 8.0f;       // Mudou para 8.0f (esticado até -8 e 8)
+    float raio_y = 1.5f; 
+    int num_segmentos = 50; 
+
+    // 2. Desenha o preenchimento (Interior do Lago)
+    glBegin(GL_TRIANGLE_FAN);
+        glVertex2f(centro_x, centro_y); 
+        for (int i = 0; i <= num_segmentos; i++) {
+            float angulo = i * 2.0f * 3.14159265f / num_segmentos;
+            float x = centro_x + (cos(angulo) * raio_x);
+            float y = centro_y + (sin(angulo) * raio_y);
+            glVertex2f(x, y);
+        }
+    glEnd();
+
+    // 3. Desenha a borda (Contorno do Lago)
+    glColor3f(0.1f, 0.3f, 0.5f); 
+    glLineWidth(2.0f);
+    glBegin(GL_LINE_LOOP);
+        for (int i = 0; i < num_segmentos; i++) {
+            float angulo = i * 2.0f * 3.14159265f / num_segmentos;
+            float x = centro_x + (cos(angulo) * raio_x);
+            float y = centro_y + (sin(angulo) * raio_y);
+            glVertex2f(x, y);
+        }
+    glEnd();
+    glPopMatrix();
+	
+}
+   
+   //----------------------------------------------------------------------------------------------------------------------------------------------------
+ // 1. FUNÇÃO AUXILIAR
+float vector_pos_x_fantasia(int valor) {
+    return (float)((valor * 123456789) % 3) - 1.0f;
+}
+
+// 2. FUNÇÃO DA GRAMA CORRIGIDA (Base em -2.3f)
+void DesenhaGrama() {
+    glPushMatrix();
+
+    // 1. BASE DA GRAMA (Retângulo verde plano)
+    // Agora começa exatamente em Y = -2.3f e vai até Y = -1.5f
+    glColor3f(0.46f, 0.82f, 0.0f); // Verde claro clássico
+    glBegin(GL_QUADS);
+        glVertex2f(-12.0f, -2.3f); // Começo da grama
+        glVertex2f( 12.0f, -2.3f);
+        glVertex2f( 12.0f, -1.5f); // Topo liso do bloco
+        glVertex2f(-12.0f, -1.5f);
+    glEnd();
+
+    // 2. DETALHES ESPETADOS DA GRAMA (Triângulos)
+    float x_inicio = -12.0f;
+    float x_fim = 12.0f;
+    float passo = 0.4f; 
+    
+    glBegin(GL_TRIANGLES);
+    for (float x = x_inicio; x < x_fim; x += passo) {
+        // Os espetos agora brotam a partir do topo do bloco (Y = -1.5f)
+        float y_base = -1.5f; 
+        
+        // Pequena variação para dar o efeito serrilhado clássico
+        float altura1 = 0.25f + (vector_pos_x_fantasia((int)(x * 10)) * 0.05f); 
+        float altura2 = 0.35f - (vector_pos_x_fantasia((int)(x * 5)) * 0.05f);
+
+        // Primeiro espeto
+        glVertex2f(x, y_base);
+        glVertex2f(x + 0.2f, y_base);
+        glVertex2f(x + 0.05f, y_base + altura1);
+
+        // Segundo espeto
+        glVertex2f(x + 0.15f, y_base);
+        glVertex2f(x + 0.35f, y_base);
+        glVertex2f(x + 0.28f, y_base + altura2);
+    }
+    glEnd();
+
+    // 3. DETALHES DE SOMBRA (Risquinhos verde-escuros)
+    // Posicionados dentro da nova faixa (entre -2.3f e -1.5f)
+    glColor3f(0.1f, 0.45f, 0.0f); 
+    glLineWidth(2.0f);
+    glBegin(GL_LINES);
+        for (float gx = -11.0f; gx < 12.0f; gx += 2.5f) {
+            // Risquinhos ajustados para o novo espaço
+            glVertex2f(gx, -2.1f);        glVertex2f(gx, -1.8f);
+            glVertex2f(gx + 0.4f, -2.0f);  glVertex2f(gx + 0.4f, -1.7f);
+            glVertex2f(gx + 1.2f, -2.2f);  glVertex2f(gx + 1.2f, -1.9f);
+        }
+    glEnd();
+
+    glPopMatrix();
+}
+
+   
+//Desenha a Árvore Plana
+void DesenhaArvorePlana(float base_x, float base_y) {
+    glPushMatrix();
+    glTranslatef(base_x, base_y, 0.0f);
+
+    // Cor padrão do preenchimento e contorno do tronco
+    float cor_tronco_r = 0.4f, cor_tronco_g = 0.2f, cor_tronco_b = 0.0f;
+    float cor_borda_r = 0.15f, cor_borda_g = 0.08f, cor_borda_b = 0.0f;
+
+    // ==========================================
+    // 1. TRONCO E GALHOS (Estrutura Geométrica com Contorno)
+    // ==========================================
+    // Tronco Central
+    glColor3f(cor_tronco_r, cor_tronco_g, cor_tronco_b);
+    glBegin(GL_QUADS);
+        glVertex2f(-0.4f, 0.0f);
+        glVertex2f( 0.4f, 0.0f);
+        glVertex2f( 0.2f, 3.2f);
+        glVertex2f(-0.2f, 3.2f);
+    glEnd();
+
+    // Galho Esquerdo (Saindo para a diagonal)
+    glBegin(GL_QUADS);
+        glVertex2f(-0.2f, 2.4f);
+        glVertex2f( 0.0f, 2.1f);
+        glVertex2f(-1.1f, 3.8f);
+        glVertex2f(-1.3f, 3.6f);
+    glEnd();
+
+    // Galho Direito (Saindo para a diagonal)
+    glBegin(GL_QUADS);
+        glVertex2f( 0.0f, 2.1f);
+        glVertex2f( 0.2f, 2.4f);
+        glVertex2f( 1.3f, 3.6f);
+        glVertex2f( 1.1f, 3.8f);
+    glEnd();
+
+    // Linhas de Contorno da Madeira (Apenas para destacar o tronco)
+    glColor3f(cor_borda_r, cor_borda_g, cor_borda_b);
+    glLineWidth(2.0f);
+    glBegin(GL_LINES);
+        // Contorno esquerdo do tronco
+        glVertex2f(-0.4f, 0.0f); glVertex2f(-0.2f, 3.2f);
+        // Contorno direito do tronco
+        glVertex2f( 0.4f, 0.0f); glVertex2f( 0.2f, 3.2f);
+        // Contornos do galho esquerdo
+        glVertex2f(-0.2f, 2.4f); glVertex2f(-1.3f, 3.6f);
+        glVertex2f( 0.0f, 2.1f); glVertex2f(-1.1f, 3.8f);
+        // Contornos do galho direito
+        glVertex2f( 0.2f, 2.4f); glVertex2f( 1.3f, 3.6f);
+        glVertex2f( 0.0f, 2.1f); glVertex2f( 1.1f, 3.8f);
+    glEnd();
+
+    // ==========================================
+    // 2. COPA DA ÁRVORE (Cor Verde Pura e Sem Bordas)
+    // ==========================================
+    float verde_r = 0.1f;
+    float verde_g = 0.55f;
+    float verde_b = 0.1f;
+
+    // Criando o volume com as 7 esferas que se fundem perfeitamente agora
+    DesenhaCirculoSolido(-1.6f, 3.6f, 1.2f, verde_r, verde_g, verde_b); // Lateral Esquerda Baixa
+    DesenhaCirculoSolido( 1.6f, 3.6f, 1.2f, verde_r, verde_g, verde_b); // Lateral Direita Baixa
+    
+    DesenhaCirculoSolido(-1.1f, 4.5f, 1.4f, verde_r, verde_g, verde_b); // Meio Esquerda
+    DesenhaCirculoSolido( 1.1f, 4.5f, 1.4f, verde_r, verde_g, verde_b); // Meio Direita
+    
+    DesenhaCirculoSolido(-0.5f, 5.4f, 1.3f, verde_r, verde_g, verde_b); // Topo Esquerda
+    DesenhaCirculoSolido( 0.5f, 5.4f, 1.3f, verde_r, verde_g, verde_b); // Topo Direita
+    
+    DesenhaCirculoSolido( 0.0f, 4.3f, 1.6f, verde_r, verde_g, verde_b); // Centro Grande Interno
+
+    glPopMatrix();
+}
+
+void DesenhaNuvem(float base_x, float base_y) {
+    glPushMatrix();
+
+    glTranslatef(base_x, base_y, 0.0f);
+
+    // Cor da Nuvem (Branco Puro)
+    glColor3f(1.0f, 1.0f, 1.0f);
+
+    // Configurações geométricas (Agora o centro_y relativo é 0.0)
+    int lados = 9;
+    float raio = 1.0f;
+    float centro_y = 0.0f;
+
+    // NONÁGONO-E	
+    glBegin(GL_TRIANGLE_FAN);
+        glVertex2f(-1.3f, centro_y); 
+        for (int i = 0; i <= lados; i++) {
+            float ang = i * 2.0f * 3.14159265f / lados;
+            glVertex2f(-1.3f + cos(ang) * raio, centro_y + sin(ang) * raio);
+        }
+    glEnd();
+    // NONÁGONO-C
+    glBegin(GL_TRIANGLE_FAN);
+        glVertex2f(0.0f, centro_y); 
+        for (int i = 0; i <= lados; i++) {
+            float ang = i * 2.0f * 3.14159265f / lados;
+            glVertex2f(0.0f + cos(ang) * raio, centro_y + sin(ang) * raio);
+        }
+    glEnd();
+    //NONÁGONO-D
+    glBegin(GL_TRIANGLE_FAN);
+        glVertex2f(1.3f, centro_y); 
+        for (int i = 0; i <= lados; i++) {
+            float ang = i * 2.0f * 3.14159265f / lados;
+            glVertex2f(1.3f + cos(ang) * raio, centro_y + sin(ang) * raio);
+        }
+    glEnd();
+    glPopMatrix();
 }
 
 void DesenhaUI() {
@@ -445,7 +689,13 @@ void gMeusDesenhos() {
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     
-    DesenhaCenario();            
+	DesenhaNuvem(2.5f, 7.5f);
+    DesenhaNuvem(-5.0f, 8.0f);
+	DesenhaArvorePlana(-8.0f, 1.3f); 
+    DesenhaArvorePlana(8.0f, 1.3f); 
+	DesenhaCenario();	
+	DesenhaGrama();
+	         
     DesenhaEixosComNumeracao();  
     DesenhaPato();               
     DesenhaUI();                 
@@ -523,10 +773,17 @@ void gTempoExecucao (int valor) {
             g_pato_x += g_pato_vel_x * dt;
             g_pato_y += g_pato_vel_y * dt;
             
+            // Limite horizontal (esquerda/direita) - Mantém quicando nas laterais
             if (g_pato_x > 13.5f) { g_pato_x = 13.5f; g_pato_vel_x = -g_pato_vel_x; }
             if (g_pato_x < -13.5f) { g_pato_x = -13.5f; g_pato_vel_x = -g_pato_vel_x; }
             
-            if (g_pato_y > 9.0f) { g_pato_y = 9.0f; g_pato_vel_y = -g_pato_vel_y; }
+            // ALTERAÇÃO AQUI: Limite vertical superior (Topo da tela)
+            // Quando passa de 11.0f, desaparece e força o respawn lateral imediato
+            if (g_pato_y > 11.0f) { 
+                ResetaPato(); 
+            }
+            
+            // Limite vertical inferior (Chão) - Mantém quicando para cima
             if (g_pato_y < -1.5f) { g_pato_y = -1.5f; g_pato_vel_y = -g_pato_vel_y; }
         } else {
             g_pato_y -= 12.0f * dt;
@@ -540,7 +797,6 @@ void gTempoExecucao (int valor) {
             }
         }
     } else {
-        // CORREÇÃO: Linha duplicada errada removida daqui. Apenas incrementa a tela final.
         g_tempo_tela_final += dt;
         if (g_tempo_tela_final >= 2.0f) {
             ResetaJogoCompleto();
