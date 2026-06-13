@@ -1,12 +1,14 @@
 /*
-Bruno AlteraÁ„o:
+Bruno Altera√ß√£o:
 Mudei a hitbox do pato em gMouse() para 25.
 Aumentei a velocidade dos patos em ResetaPato()
 Spawn do pato nas laterais e quicando fora da tela
-Alterei tirando toda partr 3D pra puramente 2D, eliminando necessidade dimens„o Z
-OtimizaÁ„o: Implementado Delta Time e V-Sync via Idle Loop para eliminar travamentos e engasgos visuais. PorÈm n sei se È meu note ou jogo msm.
-Adicionado: CronÙmetro de 60 segundos com reset autom·tico de jogo ao zerar.
-ModificaÁ„o Atual: Suporte a m˙ltiplos patos din‚micos baseados no tempo restante (Mapeado a cada 12 segundos).
+Alterei tirando toda partr 3D pra puramente 2D, eliminando necessidade dimens√£o Z
+Otimiza√ß√£o: Implementado Delta Time e V-Sync via Idle Loop para eliminar travamentos e engasgos visuais. Por√©m n sei se √© meu note ou jogo msm.
+Adicionado: Cron√¥metro de 60 segundos com reset autom√°tico de jogo ao zerar.
+Modifica√ß√£o Atual: Suporte a m√∫ltiplos patos din√¢micos baseados no tempo restante (Mapeado a cada 12 segundos).
+
+Ray: Menu isolado em tela azul (#6fa7c8) reutilizando os patos originais do jogo voando pelo menu (IMPORTANTE: codei pelo vs, ent√£o antes de rodarem √© preciso excluir o .exe e compilar novamente)
 */
 
 #include <stdio.h>
@@ -20,12 +22,12 @@ ModificaÁ„o Atual: Suporte a m˙ltiplos patos din‚micos baseados no tempo restant
 #include <GL/freeglut.h>
 
 #define TAM_JANELA 100.00
-#define MAX_PATOS 5 // M·ximo de patos na tela (60s / 12s = 5 patos no fim)
+#define MAX_PATOS 5 // M√°ximo de patos na tela (60s / 12s = 5 patos no fim)
 
-// DefiniÁ„o do protÛtipo para o V-Sync do Windows
+// Defini√ß√£o do prot√≥tipo para o V-Sync do Windows
 typedef BOOL (WINAPI *PFNWGLSWAPINTERVALEXTPROC) (int interval);
 
-// Vari·veis de controle de Janela (Estrutura do Modelo)
+// Vari√°veis de controle de Janela
 int g_posicao_x = 50;
 int g_posicao_y = 50;
 int g_largura = 800;
@@ -36,7 +38,7 @@ int g_idle = 1;
 int g_timer = 0;           
 int g_timer_value = 16;    
 
-// Estrutura para gerenciar m˙ltiplos patos
+// Estrutura para gerenciar m√∫ltiplos patos
 typedef struct {
     float x;
     float y;
@@ -45,24 +47,32 @@ typedef struct {
     int vivo;
     int foi_baleado;
     float acumulador_morte;
-    int ativo; // Se o pato j· foi liberado pelo tempo do jogo
+    int ativo; // Se o pato j√° foi liberado pelo tempo do jogo
 } Pato;
 
 Pato g_patos[MAX_PATOS];
 
 int g_score = 0;
 int g_botao_pressionado = 0;
-int g_pato_recente_baleado = -1; // Index para mostrar mensagem de acerto
+int g_pato_recente_baleado = -1; 
 
-// Vari·veis de Controle do CronÙmetro e Estado de Fim de Jogo
+// Vari√°veis de Controle do Estado do Jogo e Cron√¥metro
+int g_estado_jogo = 0;            // 0 = Menu Inicial, 1 = Jogo Ativo
 float g_cronometro = 60.0f;       // Tempo inicial (1 minuto)
-int g_jogo_finalizado = 0;       // Trava o jogo quando o tempo zera
+int g_jogo_finalizado = 0;        // Trava o jogo quando o tempo zera
 float g_tempo_tela_final = 0.0f;  // Acumulador para segurar a tela de "Fim" por 2 segundos
 
 // Controle de Tempo Real (Delta Time)
 int g_tempo_anterior = 0;
 
-// FunÁıes LÛgicas do Jogo
+// Inst√¢ncias de patos virtuais usados exclusivamente para decorar o menu de in√≠cio
+Pato g_pato_decorativo1;
+Pato g_pato_decorativo2;
+
+// =====================================================================
+// L√ìGICA DO JOGO E RESET
+// =====================================================================
+
 void ResetaPato(int index) {
     g_patos[index].vivo = 1;
     g_patos[index].foi_baleado = 0;
@@ -76,7 +86,7 @@ void ResetaPato(int index) {
     if (rand() % 2 == 0) g_patos[index].vel_y = -g_patos[index].vel_y;
 
     if (rand() % 2 == 0) {
-        g_patos[index].x = -13.5f - (rand() % 30) / 10.0f; // Adicionado offset para n„o nascerem juntos
+        g_patos[index].x = -13.5f - (rand() % 30) / 10.0f; 
         if (g_patos[index].vel_x < 0) g_patos[index].vel_x = -g_patos[index].vel_x;
     } else {
         g_patos[index].x = 13.5f + (rand() % 30) / 10.0f;  
@@ -85,11 +95,6 @@ void ResetaPato(int index) {
 }
 
 void AtualizaPatosAtivos() {
-    // 60s a 48s = 1 pato
-    // 48s a 36s = 2 patos
-    // 36s a 24s = 3 patos
-    // 24s a 12s = 4 patos
-    // 12s a 0s  = 5 patos
     int patos_necessarios = 1 + (int)((60.0f - g_cronometro) / 12.0f);
     if (patos_necessarios > MAX_PATOS) patos_necessarios = MAX_PATOS;
 
@@ -97,7 +102,7 @@ void AtualizaPatosAtivos() {
         if (i < patos_necessarios) {
             if (!g_patos[i].ativo) {
                 g_patos[i].ativo = 1;
-                ResetaPato(i); // Nascem em momentos diferentes baseados no frame que entram
+                ResetaPato(i); 
             }
         } else {
             g_patos[i].ativo = 0;
@@ -113,12 +118,15 @@ void ResetaJogoCompleto() {
     g_pato_recente_baleado = -1;
 
     for (int i = 0; i < MAX_PATOS; i++) {
-        g_patos[i].ativo = (i == 0) ? 1 : 0; // SÛ o primeiro comeÁa ativo
+        g_patos[i].ativo = (i == 0 && g_estado_jogo == 1) ? 1 : 0; 
         ResetaPato(i);
     }
 }
 
-// FunÁ„o auxiliar para desenhar as formas circulares da copa
+// =====================================================================
+// FUN√á√ïES DE DESENHO EST√ÅTICO (CEN√ÅRIO) E ENTIDADES
+// =====================================================================
+
 void DesenhaCirculoSolido(float cx, float cy, float r, float red, float green, float blue) {
     int seg = 24;
     glColor3f(red, green, blue);
@@ -253,7 +261,7 @@ void DesenhaPatoIndividual(Pato p) {
             glVertex2f(-17.5f, 45.0f);  
         glEnd();
         
-        glColor3f(1.0f, 1.0f, 1.0f); 
+        glColor3f(1.0f, 1.0f, 1.4f); 
         glBegin(GL_TRIANGLES);
             glVertex2f(-58.0f, 55.5f);  
             glVertex2f(-133.0f, 0.0f);  
@@ -378,7 +386,7 @@ void DesenhaCenario() {
     int num_segmentos = 50; 
 
     glBegin(GL_TRIANGLE_FAN);
-        glVertex2f(centro_x, centro_y); \
+        glVertex2f(centro_x, centro_y);
         for (int i = 0; i <= num_segmentos; i++) {
             float angulo = i * 2.0f * 3.14159265f / num_segmentos;
             float x = centro_x + (cos(angulo) * raio_x);
@@ -537,6 +545,123 @@ void DesenhaNuvem(float base_x, float base_y) {
     glPopMatrix();
 }
 
+// =====================================================================
+// INTERFACE 
+// =====================================================================
+
+void DesenhaTextoStrokeCentrado(float y, float scale, float lineWidth, float r, float g, float b, char* texto) {
+    int i;
+    int len = glutStrokeLength(GLUT_STROKE_ROMAN, (unsigned char*)texto);
+    float x = (g_largura / 2.0f) - ((len * scale) / 2.0f);
+
+    glLineWidth(lineWidth);
+    glColor3f(0.0f, 0.0f, 0.0f);
+    glPushMatrix();
+    glTranslatef(x + 2, y - 2, 0);
+    glScalef(scale, scale, 1.0f);
+    for (i = 0; texto[i]; i++) {
+        glutStrokeCharacter(GLUT_STROKE_ROMAN, texto[i]);
+    }
+    glPopMatrix();
+
+    glColor3f(r, g, b);
+    glPushMatrix();
+    glTranslatef(x, y, 0);
+    glScalef(scale, scale, 1.0f);
+    for (i = 0; texto[i]; i++) {
+        glutStrokeCharacter(GLUT_STROKE_ROMAN, texto[i]);
+    }
+    glPopMatrix();
+}
+
+void DesenhaMenu() {
+    char iniciar[] = "Start";
+    char score_val[20];
+    int i;
+    
+    // 1. REUTILIZA√á√ÉO DOS PATOS DO JOGO NO MENU (Usando as mesmas coordenadas ortogr√°ficas do cen√°rio [-12, 12])
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(-12.0, 12.0, -5.0, 10.0, -1.0, 1.0);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    // Renderiza as duas inst√¢ncias reutilizadas com os dados visuais originais
+    DesenhaPatoIndividual(g_pato_decorativo1);
+    DesenhaPatoIndividual(g_pato_decorativo2);
+
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+
+    // 2. ELEMENTOS DE TEXTO E INTERFACE (Proje√ß√£o baseada na resolu√ß√£o da janela [0, largura])
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(0, g_largura, 0, g_altura, -1, 1);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+
+    // T√≠tulo do Jogo
+    DesenhaTextoStrokeCentrado(430, 0.75f, 5.0f, 0.05f, 0.05f, 0.15f, "DUCK");
+    DesenhaTextoStrokeCentrado(350, 0.75f, 5.0f, 0.05f, 0.05f, 0.15f, "HUNT");
+
+    // Bot√£o Iniciar
+    int left = g_largura / 2 - 70;
+    int right = g_largura / 2 + 70;
+    int bottom = 260; 
+    int top = 300;    
+
+    glColor3f(0.0f, 0.0f, 0.0f);
+    glBegin(GL_QUADS);
+        glVertex2i(left - 4, bottom - 4);
+        glVertex2i(right + 4, bottom - 4);
+        glVertex2i(right + 4, top + 4);
+        glVertex2i(left - 4, top + 4);
+    glEnd();
+
+    glColor3f(0.0f, 0.55f, 0.25f);
+    glBegin(GL_QUADS);
+        glVertex2i(left, bottom);
+        glVertex2i(right, bottom);
+        glVertex2i(right, top);
+        glVertex2i(left, top);
+    glEnd();
+
+    glColor3f(1.0f, 1.0f, 1.0f);
+    glBegin(GL_QUADS);
+        glVertex2i(left, top - 3); glVertex2i(right, top - 3);
+        glVertex2i(right, top);     glVertex2i(left, top);
+    glEnd();
+    glBegin(GL_QUADS);
+        glVertex2i(left, bottom);  glVertex2i(left + 3, bottom);
+        glVertex2i(left + 3, top);  glVertex2i(left, top);
+    glEnd();
+
+    glColor3f(0.0f, 0.0f, 0.0f);
+    int txt_width = 0;
+    for (i = 0; iniciar[i]; i++) {
+        txt_width += glutBitmapWidth(GLUT_BITMAP_HELVETICA_18, iniciar[i]);
+    }
+    glRasterPos2i(g_largura / 2 - (txt_width / 2), 273);
+    i = 0;
+    while (iniciar[i]) {
+        glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, iniciar[i]);
+        i++;
+    }
+
+    // Hist√≥rico de Score
+    sprintf(score_val, "%d", g_score);
+    DesenhaTextoStrokeCentrado(200, 0.20f, 2.5f, 0.0f, 0.0f, 0.0f, "LAST SCORE:");
+    DesenhaTextoStrokeCentrado(165, 0.20f, 2.5f, 0.0f, 0.0f, 0.0f, score_val);
+
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+}
+
 void DesenhaUI() {
     int i;
     char buffer[50];
@@ -558,7 +683,7 @@ void DesenhaUI() {
         i++;
     }
 
-    // CronÙmetro
+    // Cron√¥metro
     if (g_cronometro < 10.0f) {
         glColor3f(1.0f, 0.2f, 0.2f); 
     } else {
@@ -593,7 +718,6 @@ void DesenhaUI() {
         }
     }
 
-    // Se houver algum pato recÈm abatido
     if (g_pato_recente_baleado != -1 && !g_jogo_finalizado) {
         glColor3f(1.0f, 0.0f, 0.0f);
         glRasterPos2i(g_largura/2 - 60, g_altura/2 + 20);
@@ -618,23 +742,32 @@ void DesenhaUI() {
     glMatrixMode(GL_PROJECTION);
 }
 
+// =====================================================================
+// FUN√á√ïES PRINCIPAIS DE RENDERIZA√á√ÉO E EVENTOS
+// =====================================================================
+
 void gMeusDesenhos() {
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glOrtho(-12.0, 12.0, -5.0, 10.0, -1.0, 1.0);
-    
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-    
-    DesenhaNuvem(2.5f, 7.5f);
-    DesenhaNuvem(-5.0f, 8.0f);
-    DesenhaArvorePlana(-8.0f, 1.3f); 
-    DesenhaArvorePlana(8.0f, 1.3f); 
-    DesenhaCenario();    
-    DesenhaGrama();
-             
-    DesenhaPato();               
-    DesenhaUI();                 
+    if (g_estado_jogo == 0) {
+        // Se estiver no menu, desenha apenas a tela limpa azul e os componentes de UI + patos originais
+        DesenhaMenu();
+    } else {         
+        // Se estiver jogando, carrega toda a floresta original e inicia a partida ativa
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glOrtho(-12.0, 12.0, -5.0, 10.0, -1.0, 1.0);
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+
+        DesenhaNuvem(2.5f, 7.5f);
+        DesenhaNuvem(-5.0f, 8.0f);
+        DesenhaArvorePlana(-8.0f, 1.3f); 
+        DesenhaArvorePlana(8.0f, 1.3f); 
+        DesenhaCenario();    
+        DesenhaGrama();
+        
+        DesenhaPato();               
+        DesenhaUI();
+    }
 }
 
 void gDesenha (void) {
@@ -662,14 +795,31 @@ void gEspeciais (int tecla, int x, int y) {
 }
 
 void gMouse (int botao, int estado, int x, int y) {
-    if (g_jogo_finalizado) return;
-
     if (botao == GLUT_LEFT_BUTTON) {
         if (estado == GLUT_DOWN) {
             g_botao_pressionado = 1;
-            int acertou_algum = 0;
             
-            // Loop reverso para checar colisıes (clica no que est· mais acima visualmente)
+            // L√≥gica do Clique no Bot√£o Start
+            if (g_estado_jogo == 0) {
+                int y_ortho = g_altura - y;
+                
+                int btn_esq = g_largura / 2 - 74;
+                int btn_dir = g_largura / 2 + 74;
+                int btn_baixo = 256; 
+                int btn_cima = 304;  
+
+                if (x >= btn_esq && x <= btn_dir && y_ortho >= btn_baixo && y_ortho <= btn_cima) {
+                    ResetaJogoCompleto(); 
+                    g_estado_jogo = 1;    
+                    // Restaura a cor azul clara do c√©u do cen√°rio
+                    glClearColor(0.53f, 0.81f, 0.92f, 1.0f);
+                }
+                return;
+            }
+
+            if (g_jogo_finalizado) return;
+
+            int acertou_algum = 0;
             for (int i = 0; i < MAX_PATOS; i++) {
                 if (g_patos[i].ativo && g_patos[i].vivo && !g_patos[i].foi_baleado) {
                     int patoTelaX = (int)((g_patos[i].x + 12.0f) * (g_largura / 24.0f));
@@ -685,11 +835,10 @@ void gMouse (int botao, int estado, int x, int y) {
                         g_score += 100;
                         g_pato_recente_baleado = i;
                         acertou_algum = 1;
-                        break; // Se acertou um pato, interrompe para n„o matar m˙ltiplos no mesmo clique
+                        break; 
                     }
                 }
             }
-            
             if (!acertou_algum) {
                 g_score -= 25;
             }
@@ -706,55 +855,67 @@ void gTempoExecucao (int valor) {
 
     if (dt > 0.1f) dt = 0.1f;
 
-    if (!g_jogo_finalizado) {
-        g_cronometro -= dt; 
-        
-        if (g_cronometro <= 0.0f) {
-            g_cronometro = 0.0f;
-            g_jogo_finalizado = 1; 
-        }
+    // Se estiver no menu, atualiza continuamente a posi√ß√£o dos dois patos reutilizados na tela
+    if (g_estado_jogo == 0) {
+        g_pato_decorativo1.x += g_pato_decorativo1.vel_x * dt;
+        if (g_pato_decorativo1.x > 14.0f) g_pato_decorativo1.x = -14.0f; // Reseta loop
 
-        // LÛgica de ativaÁ„o progressiva baseada no tempo
-        AtualizaPatosAtivos();
+        g_pato_decorativo2.x += g_pato_decorativo2.vel_x * dt;
+        if (g_pato_decorativo2.x < -14.0f) g_pato_decorativo2.x = 14.0f; // Reseta loop
+    }
 
-        // Vari·vel de controle do aviso de acerto
-        int algum_pato_caindo = 0;
+    if (g_estado_jogo == 1) {
+        if (!g_jogo_finalizado) {
+            g_cronometro -= dt; 
+            
+            if (g_cronometro <= 0.0f) {
+                g_cronometro = 0.0f;
+                g_jogo_finalizado = 1; 
+            }
 
-        // AtualizaÁ„o de cada pato individualmente
-        for (int i = 0; i < MAX_PATOS; i++) {
-            if (!g_patos[i].ativo) continue;
+            AtualizaPatosAtivos();
 
-            if (!g_patos[i].foi_baleado) {
-                g_patos[i].x += g_patos[i].vel_x * dt;
-                g_patos[i].y += g_patos[i].vel_y * dt;
-                
-                if (g_patos[i].x > 13.5f) { g_patos[i].x = 13.5f; g_patos[i].vel_x = -g_patos[i].vel_x; }
-                if (g_patos[i].x < -13.5f) { g_patos[i].x = -13.5f; g_patos[i].vel_x = -g_patos[i].vel_x; }
-                
-                if (g_patos[i].y > 11.0f) { 
-                    ResetaPato(i); 
-                }
-                
-                if (g_patos[i].y < -1.5f) { g_patos[i].y = -1.5f; g_patos[i].vel_y = -g_patos[i].vel_y; }
-            } else {
-                algum_pato_caindo = 1;
-                g_patos[i].y -= 12.0f * dt;
-                if (g_patos[i].y < -2.0f) g_patos[i].y = -2.0f;
+            int algum_pato_caindo = 0;
 
-                g_patos[i].acumulador_morte += dt;
-                if (g_patos[i].acumulador_morte > 0.75f) { 
-                    ResetaPato(i);
-                    if (g_pato_recente_baleado == i) g_pato_recente_baleado = -1;
+            for (int i = 0; i < MAX_PATOS; i++) {
+                if (!g_patos[i].ativo) continue;
+
+                if (!g_patos[i].foi_baleado) {
+                    g_patos[i].x += g_patos[i].vel_x * dt;
+                    g_patos[i].y += g_patos[i].vel_y * dt;
+                    
+                    if (g_patos[i].x > 13.5f) { g_patos[i].x = 13.5f; g_patos[i].vel_x = -g_patos[i].vel_x; }
+                    if (g_patos[i].x < -13.5f) { g_patos[i].x = -13.5f; g_patos[i].vel_x = -g_patos[i].vel_x; }
+                    
+                    if (g_patos[i].y > 11.0f) { 
+                        ResetaPato(i); 
+                    }
+                    
+                    if (g_patos[i].y < -1.5f) { g_patos[i].y = -1.5f; g_patos[i].vel_y = -g_patos[i].vel_y; }
+                } else {
+                    algum_pato_caindo = 1;
+                    g_patos[i].y -= 12.0f * dt;
+                    if (g_patos[i].y < -2.0f) g_patos[i].y = -2.0f;
+
+                    g_patos[i].acumulador_morte += dt;
+                    if (g_patos[i].acumulador_morte > 0.75f) { 
+                        ResetaPato(i);
+                        if (g_pato_recente_baleado == i) g_pato_recente_baleado = -1;
+                    }
                 }
             }
-        }
-        
-        if (!algum_pato_caindo) g_pato_recente_baleado = -1;
+            
+            if (!algum_pato_caindo) g_pato_recente_baleado = -1;
 
-    } else {
-        g_tempo_tela_final += dt;
-        if (g_tempo_tela_final >= 2.0f) {
-            ResetaJogoCompleto();
+        } else {
+            g_tempo_tela_final += dt;
+            if (g_tempo_tela_final >= 2.0f) {
+                g_estado_jogo = 0; 
+                g_jogo_finalizado = 0; 
+                g_tempo_tela_final = 0.0f;
+                // Volta para a cor do menu azul s√≥lido ao finalizar
+                glClearColor(0.435f, 0.655f, 0.784f, 1.0f);
+            }
         }
     }
     
@@ -773,19 +934,29 @@ void gMenuJanela (void) {;}
 
 void gInicializa (void) {
     glDisable(GL_DEPTH_TEST); 
-    glClearColor (0.53f, 0.81f, 0.92f, 1.0f); 
+    // Cor de limpeza inicial: Azul S√≥lido Hex #6fa7c8 -> RGB aproximado
+    glClearColor (0.435f, 0.655f, 0.784f, 1.0f); 
     srand((unsigned int)time(NULL));
     
     PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = 
         (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
     if (wglSwapIntervalEXT) {
         wglSwapIntervalEXT(1); 
-        printf("V-Sync ativated com sucesso!\n");
+        printf("V-Sync ativado com sucesso!\n");
     } else {
         printf("Aviso: V-Sync nao suportado pelo driver.\n");
     }
 
     g_tempo_anterior = glutGet(GLUT_ELAPSED_TIME); 
+
+    // Configurando par√¢metros iniciais para os patos decorativos do Menu
+    g_pato_decorativo1.vivo = 1; g_pato_decorativo1.foi_baleado = 0;
+    g_pato_decorativo1.x = -10.0f; g_pato_decorativo1.y = 7.0f; g_pato_decorativo1.vel_x = 5.0f;
+
+    g_pato_decorativo2.vivo = 1; g_pato_decorativo2.foi_baleado = 0;
+    g_pato_decorativo2.x = 8.0f; g_pato_decorativo2.y = 2.0f; g_pato_decorativo2.vel_x = -3.5f; // Voa para tr√°s
+    
+    g_estado_jogo = 0; 
     ResetaJogoCompleto(); 
 }
 
