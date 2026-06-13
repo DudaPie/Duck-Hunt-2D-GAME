@@ -9,6 +9,9 @@ Adicionado: Cronômetro de 60 segundos com reset automático de jogo ao zerar.
 Modificação Atual: Suporte a múltiplos patos dinâmicos baseados no tempo restante (Mapeado a cada 12 segundos).
 
 Ray: Menu isolado em tela azul (#6fa7c8) reutilizando os patos originais do jogo voando pelo menu (IMPORTANTE: codei pelo vs, então antes de rodarem é preciso excluir o .exe e compilar novamente)
+gcc main.c -o "Jogo Pato.exe" -lfreeglut -lopengl32 -lglu32
+./"Jogo Pato.exe"
+Ray: Menu GameOver criado, mesmo layout do Start
 */
 
 #include <stdio.h>
@@ -60,12 +63,12 @@ int g_pato_recente_baleado = -1;
 int g_estado_jogo = 0;            // 0 = Menu Inicial, 1 = Jogo Ativo
 float g_cronometro = 60.0f;       // Tempo inicial (1 minuto)
 int g_jogo_finalizado = 0;        // Trava o jogo quando o tempo zera
-float g_tempo_tela_final = 0.0f;  // Acumulador para segurar a tela de "Fim" por 2 segundos
+float g_tempo_tela_final = 0.0f;  // Acumulador para segurar a tela de "Fim" 
 
 // Controle de Tempo Real (Delta Time)
 int g_tempo_anterior = 0;
 
-// Instâncias de patos virtuais usados exclusivamente para decorar o menu de início
+// Instâncias de patos virtuais usados exclusivamente para decorar o menu de início e fim
 Pato g_pato_decorativo1;
 Pato g_pato_decorativo2;
 
@@ -546,7 +549,7 @@ void DesenhaNuvem(float base_x, float base_y) {
 }
 
 // =====================================================================
-// INTERFACE 
+// INTERFACE (MENU, TELA DE FIM E HUD)
 // =====================================================================
 
 void DesenhaTextoStrokeCentrado(float y, float scale, float lineWidth, float r, float g, float b, char* texto) {
@@ -579,7 +582,7 @@ void DesenhaMenu() {
     char score_val[20];
     int i;
     
-    // 1. REUTILIZAÇÃO DOS PATOS DO JOGO NO MENU (Usando as mesmas coordenadas ortográficas do cenário [-12, 12])
+    // 1. REUTILIZAÇÃO DOS PATOS DO JOGO NO MENU
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
@@ -588,7 +591,6 @@ void DesenhaMenu() {
     glPushMatrix();
     glLoadIdentity();
 
-    // Renderiza as duas instâncias reutilizadas com os dados visuais originais
     DesenhaPatoIndividual(g_pato_decorativo1);
     DesenhaPatoIndividual(g_pato_decorativo2);
 
@@ -597,7 +599,7 @@ void DesenhaMenu() {
     glPopMatrix();
     glMatrixMode(GL_MODELVIEW);
 
-    // 2. ELEMENTOS DE TEXTO E INTERFACE (Projeção baseada na resolução da janela [0, largura])
+    // 2. ELEMENTOS DE TEXTO E INTERFACE
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
@@ -662,6 +664,42 @@ void DesenhaMenu() {
     glMatrixMode(GL_PROJECTION);
 }
 
+void DesenhaTelaFim() {
+    // 1. REUTILIZAÇÃO DOS PATOS DECORATIVOS NA TELA DE FIM
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(-12.0, 12.0, -5.0, 10.0, -1.0, 1.0);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    DesenhaPatoIndividual(g_pato_decorativo1);
+    DesenhaPatoIndividual(g_pato_decorativo2);
+
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+
+    // 2. TEXTOS DE FIM DE JOGO
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(0, g_largura, 0, g_altura, -1, 1);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+
+    // TEMPO ESGOTADO! usando a cor e estilo do titulo do menu
+    DesenhaTextoStrokeCentrado(360, 0.40f, 4.0f, 0.05f, 0.05f, 0.15f, "TEMPO ESGOTADO!");
+    
+    // REDIRECIONANDO... usando a mesma cor do preenchimento do botão Start
+    DesenhaTextoStrokeCentrado(290, 0.25f, 2.5f, 0.0f, 0.55f, 0.25f, "REDIRECIONANDO...");
+
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+}
+
 void DesenhaUI() {
     int i;
     char buffer[50];
@@ -697,27 +735,7 @@ void DesenhaUI() {
         i++;
     }
 
-    // Tela de Fim de Jogo
-    if (g_jogo_finalizado) {
-        glColor3f(1.0f, 0.0f, 0.0f);
-        glRasterPos2i(g_largura / 2 - 100, g_altura / 2 + 20);
-        char fim_msg[] = "TEMPO ESGOTADO!";
-        i = 0;
-        while (fim_msg[i]) {
-            glutBitmapCharacter(GLUT_BITMAP_TIMES_ROMAN_24, fim_msg[i]);
-            i++;
-        }
-        
-        glColor3f(1.0f, 1.0f, 1.0f);
-        glRasterPos2i(g_largura / 2 - 70, g_altura / 2 - 15);
-        char reset_msg[] = "Reiniciando...";
-        i = 0;
-        while (reset_msg[i]) {
-            glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, reset_msg[i]);
-            i++;
-        }
-    }
-
+    // Se houver algum pato recém abatido mostra pontuação na tela do jogo
     if (g_pato_recente_baleado != -1 && !g_jogo_finalizado) {
         glColor3f(1.0f, 0.0f, 0.0f);
         glRasterPos2i(g_largura/2 - 60, g_altura/2 + 20);
@@ -750,8 +768,11 @@ void gMeusDesenhos() {
     if (g_estado_jogo == 0) {
         // Se estiver no menu, desenha apenas a tela limpa azul e os componentes de UI + patos originais
         DesenhaMenu();
+    } else if (g_estado_jogo == 1 && g_jogo_finalizado) {
+        // Se o tempo esgotou, desenha a tela azul isolada de Fim de Jogo
+        DesenhaTelaFim();
     } else {         
-        // Se estiver jogando, carrega toda a floresta original e inicia a partida ativa
+        // Se estiver jogando ativamente, carrega toda a floresta e o HUD padrão
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
         glOrtho(-12.0, 12.0, -5.0, 10.0, -1.0, 1.0);
@@ -855,13 +876,13 @@ void gTempoExecucao (int valor) {
 
     if (dt > 0.1f) dt = 0.1f;
 
-    // Se estiver no menu, atualiza continuamente a posição dos dois patos reutilizados na tela
-    if (g_estado_jogo == 0) {
+    // Se estiver em telas de Menu ou Fim de Jogo, anima os patos decorativos no fundo azul
+    if (g_estado_jogo == 0 || (g_estado_jogo == 1 && g_jogo_finalizado == 1)) {
         g_pato_decorativo1.x += g_pato_decorativo1.vel_x * dt;
-        if (g_pato_decorativo1.x > 14.0f) g_pato_decorativo1.x = -14.0f; // Reseta loop
+        if (g_pato_decorativo1.x > 14.0f) g_pato_decorativo1.x = -14.0f; 
 
         g_pato_decorativo2.x += g_pato_decorativo2.vel_x * dt;
-        if (g_pato_decorativo2.x < -14.0f) g_pato_decorativo2.x = 14.0f; // Reseta loop
+        if (g_pato_decorativo2.x < -14.0f) g_pato_decorativo2.x = 14.0f; 
     }
 
     if (g_estado_jogo == 1) {
@@ -871,6 +892,8 @@ void gTempoExecucao (int valor) {
             if (g_cronometro <= 0.0f) {
                 g_cronometro = 0.0f;
                 g_jogo_finalizado = 1; 
+                // MUDA O FUNDO IMEDIATAMENTE PARA AZUL SÓLIDO (#6fa7c8) AO ZERAR O TEMPO
+                glClearColor(0.435f, 0.655f, 0.784f, 1.0f);
             }
 
             AtualizaPatosAtivos();
@@ -909,12 +932,10 @@ void gTempoExecucao (int valor) {
 
         } else {
             g_tempo_tela_final += dt;
-            if (g_tempo_tela_final >= 2.0f) {
+            if (g_tempo_tela_final >= 3.0f) { // Transição aumentada para 3 segundos para leitura do texto
                 g_estado_jogo = 0; 
                 g_jogo_finalizado = 0; 
                 g_tempo_tela_final = 0.0f;
-                // Volta para a cor do menu azul sólido ao finalizar
-                glClearColor(0.435f, 0.655f, 0.784f, 1.0f);
             }
         }
     }
@@ -949,7 +970,7 @@ void gInicializa (void) {
 
     g_tempo_anterior = glutGet(GLUT_ELAPSED_TIME); 
 
-    // Configurando parâmetros iniciais para os patos decorativos do Menu
+    // Configurando parâmetros iniciais para os patos decorativos do Menu / Fim
     g_pato_decorativo1.vivo = 1; g_pato_decorativo1.foi_baleado = 0;
     g_pato_decorativo1.x = -10.0f; g_pato_decorativo1.y = 7.0f; g_pato_decorativo1.vel_x = 5.0f;
 
